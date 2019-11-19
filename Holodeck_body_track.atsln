@@ -1,0 +1,20 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 11.00
+# Atmel Studio Solution File, Format Version 11.00
+Project("{54F91283-7BC4-4236-8FF9-10F437C3AD48}") = "Holodeck_body_track", "Holodeck_body_track\Holodeck_body_track.cproj", "{C4E8830A-5086-48CA-AA07-2EF6AD83AA5D}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|ARM = Debug|ARM
+		Release|ARM = Release|ARM
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{C4E8830A-5086-48CA-AA07-2EF6AD83AA5D}.Debug|ARM.ActiveCfg = Debug|ARM
+		{C4E8830A-5086-48CA-AA07-2EF6AD83AA5D}.Debug|ARM.Build.0 = Debug|ARM
+		{C4E8830A-5086-48CA-AA07-2EF6AD83AA5D}.Release|ARM.ActiveCfg = Release|ARM
+		{C4E8830A-5086-48CA-AA07-2EF6AD83AA5D}.Release|ARM.Build.0 = Release|ARM
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
