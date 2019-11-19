@@ -173,6 +173,8 @@ uint64_t inv_icm20948_get_time_us(void);
 uint64_t inv_icm20948_get_dataready_interrupt_time_us(void);
 static void check_rc(int rc);
 static void msg_printer(int level, const char * str, va_list ap);
+void channel_set(uint8_t channel);
+uint8_t read_id(uint8_t i2c_address);
 /*
  * Flag set from device irq handler 
  */
@@ -225,6 +227,68 @@ static volatile uint32_t last_irq_time = 0;
 #define DELAY_TIMER  TIMER3
 #define TIMEBASE_TIMER TIMER2
 
+ struct sensor{
+	int channel_numb;
+	uint8_t i2c_addr;
+	int present;
+	int ready;
+	//inv_device_icm20948_t Device_handle;
+	} ;
+struct sensor sensors[15];
+void channel_set(uint8_t channel){
+	
+	uint8_t data_send[10];
+	data_send[0]=channel;
+	twi_package_t packet_write = {
+		.addr         = 0,      // TWI slave memory address data
+		.addr_length  = sizeof (uint8_t),    // TWI slave memory address data size
+		.chip         = 0x70,      // TWI slave bus address
+		.buffer       = data_send, // transfer data source buffer
+		.length       = 1  // transfer data size (bytes)
+	};
+	twi_master_write(TWI0, &packet_write) ;
+}
+
+uint8_t read_id(uint8_t i2c_address){
+	
+	uint8_t data_read[10];
+	data_read[0]=0;
+	twi_package_t packet_read = {
+		.addr         = 0,      // TWI slave memory address data
+		.addr_length  = sizeof (uint8_t),    // TWI slave memory address data size
+		.chip         = i2c_address,      // TWI slave bus address
+		.buffer       = data_read, // transfer data source buffer
+		.length       = 1  // transfer data size (bytes)
+	};
+	twi_master_read(TWI0, &packet_read) ;
+	return data_read[0];
+}
+void discovery(){
+	for(int i=0;i<16;i++){
+		INV_MSG(INV_MSG_LEVEL_INFO, "Discovery is working");
+		sensors[i].channel_numb = (int)i/2;
+		if(i%2==0){
+			sensors[i].i2c_addr = (uint8_t)0b1101000;
+		}else{
+			sensors[i].i2c_addr = (uint8_t)0b1101001;
+		}
+		channel_set(0b00000001<<sensors[i].channel_numb);
+		uint8_t id = read_id(sensors[i].i2c_addr);
+			INV_MSG(INV_MSG_LEVEL_INFO, "id read %d",(int)id);
+		if(id==234){
+			INV_MSG(INV_MSG_LEVEL_INFO, "Sensor on channel:%d  Address:%d Successfully polled", sensors[i].channel_numb, (int)sensors[i].i2c_addr);
+			sensors[i].present=1;
+		}else{
+			sensors[i].present =0;
+			INV_MSG(INV_MSG_LEVEL_INFO, "Sensor on channel:%d  Address:%d Failed", sensors[i].channel_numb, (int)sensors[i].i2c_addr);
+		}
+		sensors[i].ready = 0;
+		
+	}
+	
+	
+}
+
 int setup_and_run_icm20948(void)
 {
 	int rc = 0;
@@ -258,19 +322,21 @@ int setup_and_run_icm20948(void)
 	 */
 	INV_MSG(INV_MSG_LEVEL_INFO, "Open TWI serial interface");
 	rc += inv_host_serif_open(idd_io_hal_get_serif_instance_twi());
+	
+	
 
-		uint8_t data_send[10];
-		data_send[0]=(uint8_t)1;
-			twi_package_t packet_write = {
-				.addr         = 0,      // TWI slave memory address data
-				.addr_length  = sizeof (uint8_t),    // TWI slave memory address data size
-				.chip         = 0x70,      // TWI slave bus address
-				.buffer       = data_send, // transfer data source buffer
-				.length       = 1  // transfer data size (bytes)
-			};
-			twi_master_write(TWI0, &packet_write) ;
+		//uint8_t data_send[10];
+		//data_send[0]=(uint8_t)1;
+			//twi_package_t packet_write = {
+				//.addr         = 0,      // TWI slave memory address data
+				//.addr_length  = sizeof (uint8_t),    // TWI slave memory address data size
+				//.chip         = 0x70,      // TWI slave bus address
+				//.buffer       = data_send, // transfer data source buffer
+				//.length       = 1  // transfer data size (bytes)
+			//};
+			//twi_master_write(TWI0, &packet_write) ;
 		
-
+	discovery();
 
 	/*
 	 * Create icm20948 Device 

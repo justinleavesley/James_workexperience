@@ -48,8 +48,8 @@ int main (void)
 	
 	udc_start();
 	delay_ms(2000);
-	//writel2cmux_control();
 	setup_and_run_icm20948();
+
 	
 	//twi_init();
 
@@ -72,6 +72,7 @@ int main (void)
 			sprintf(outBuf,"About to delay 500ms\n");
 			serialWrite(outBuf,strlen(outBuf));
 			delay_ms(500);
+			//setup_and_run_icm20948();
 			sprintf(outBuf,"Delay complete\n");
 			serialWrite(outBuf,strlen(outBuf));
 		if(twi_probe(TWI0,0x69)==TWI_SUCCESS){
