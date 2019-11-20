@@ -175,6 +175,7 @@ static void check_rc(int rc);
 static void msg_printer(int level, const char * str, va_list ap);
 void channel_set(uint8_t channel);
 uint8_t read_id(uint8_t i2c_address);
+void sensorinit(void);
 /*
  * Flag set from device irq handler 
  */
@@ -232,7 +233,7 @@ static volatile uint32_t last_irq_time = 0;
 	uint8_t i2c_addr;
 	int present;
 	int ready;
-	//inv_device_icm20948_t Device_handle;
+	inv_device_icm20948_t Device_handle;
 	} ;
 struct sensor sensors[15];
 void channel_set(uint8_t channel){
@@ -288,6 +289,42 @@ void discovery(){
 	
 	
 }
+void sensorinit(void){
+	for(int i=0;i<15;i++){
+		INV_MSG(INV_MSG_LEVEL_INFO, "Sensor init working");
+		int rc = 0;
+		uint8_t whoami = 0xff;
+		if (sensors[i].present ==1){
+			channel_set(0b00000001<<sensors[i].channel_numb);
+			rc += inv_host_serif_open(idd_io_hal_get_serif_instance_twi());
+			inv_device_icm20948_init(&device_icm20948, idd_io_hal_get_serif_instance_twi(),&sensor_listener, dmp3_image, sizeof(dmp3_image));
+			device = inv_device_icm20948_get_base(&device_icm20948);
+			sensors[i].Device_handle = device_icm20948;
+			rc = inv_device_whoami(device, &whoami);
+			INV_MSG(INV_MSG_LEVEL_INFO, "ICM WHOAMI=%02x", whoami);
+			INV_MSG(INV_MSG_LEVEL_INFO, "Sensor working on channel:%d", sensors[i].channel_numb);
+			check_rc(rc);
+			for(i = 0; i < sizeof(EXPECTED_WHOAMI)/sizeof(EXPECTED_WHOAMI[0]); ++i) {
+				if(whoami == EXPECTED_WHOAMI[i])
+				break;
+			}
+
+			if(i == sizeof(EXPECTED_WHOAMI)/sizeof(EXPECTED_WHOAMI[0])) {
+				INV_MSG(INV_MSG_LEVEL_ERROR, "Bad WHOAMI value. Got 0x%02x. Expected @EXPECTED_WHOAMI@.", whoami);
+				check_rc(-1);
+			
+			}
+			INV_MSG(INV_MSG_LEVEL_INFO, "Setting-up ICM device");
+			rc = inv_device_setup(device);
+			check_rc(rc);
+			INV_MSG(INV_MSG_LEVEL_INFO, "Load DMP3 image");
+			rc = inv_device_load(device, NULL, dmp3_image, sizeof(dmp3_image), true /* verify */, NULL);
+			check_rc(rc);
+			
+		}
+		INV_MSG(INV_MSG_LEVEL_INFO, "bypassed");
+	}
+}
 
 int setup_and_run_icm20948(void)
 {
@@ -322,6 +359,7 @@ int setup_and_run_icm20948(void)
 	 */
 	INV_MSG(INV_MSG_LEVEL_INFO, "Open TWI serial interface");
 	rc += inv_host_serif_open(idd_io_hal_get_serif_instance_twi());
+	//may have to move this into iteration
 	
 	
 
@@ -337,6 +375,7 @@ int setup_and_run_icm20948(void)
 			//twi_master_write(TWI0, &packet_write) ;
 		
 	discovery();
+	sensorinit();
 
 	/*
 	 * Create icm20948 Device 
@@ -346,25 +385,23 @@ int setup_and_run_icm20948(void)
 	 * - a static buffer for the driver to use as a temporary buffer
 	 * - various driver option
 	 */
-	inv_device_icm20948_init(&device_icm20948, idd_io_hal_get_serif_instance_twi(),
-			&sensor_listener, dmp3_image, sizeof(dmp3_image));
-
+	
 	/*
 	 * Simply get generic device handle from icm20948 Device
 	 */
-	device = inv_device_icm20948_get_base(&device_icm20948);
-
+	
+//device = inv_device_icm20948_get_base(&device_icm20948);
 	/*
 	 * Just get the whoami
 	 */
-	rc = inv_device_whoami(device, &whoami);
-	INV_MSG(INV_MSG_LEVEL_INFO, "ICM WHOAMI=%02x", whoami);
-	check_rc(rc);
+	//rc = inv_device_whoami(device, &whoami);
+	//INV_MSG(INV_MSG_LEVEL_INFO, "ICM WHOAMI=%02x", whoami);
+	//check_rc(rc);
 
 	/*
 	 * Check if WHOAMI value corresponds to any value from EXPECTED_WHOAMI array
 	 */
-	for(i = 0; i < sizeof(EXPECTED_WHOAMI)/sizeof(EXPECTED_WHOAMI[0]); ++i) {
+	/*for(i = 0; i < sizeof(EXPECTED_WHOAMI)/sizeof(EXPECTED_WHOAMI[0]); ++i) {
 		if(whoami == EXPECTED_WHOAMI[i])
 			break;
 	}
@@ -372,12 +409,12 @@ int setup_and_run_icm20948(void)
 	if(i == sizeof(EXPECTED_WHOAMI)/sizeof(EXPECTED_WHOAMI[0])) {
 		INV_MSG(INV_MSG_LEVEL_ERROR, "Bad WHOAMI value. Got 0x%02x. Expected @EXPECTED_WHOAMI@.", whoami);
 		check_rc(-1);
-	}
-
+	/*}
+//stop here
 	/*
 	 * Configure and initialize the icm20948 device
 	 */
-	INV_MSG(INV_MSG_LEVEL_INFO, "Setting-up ICM device");
+	/* INV_MSG(INV_MSG_LEVEL_INFO, "Setting-up ICM device");
 	rc = inv_device_setup(device);
 	check_rc(rc);
 	
@@ -385,11 +422,43 @@ int setup_and_run_icm20948(void)
 	 * Now that Icm20948 device was inialized, we can proceed with DMP image loading
 	 * This step is mandatory as DMP image are not store in non volatile memory
 	 */
-	INV_MSG(INV_MSG_LEVEL_INFO, "Load DMP3 image");
-	rc = inv_device_load(device, NULL, dmp3_image, sizeof(dmp3_image), true /* verify */, NULL);
-	check_rc(rc);
+	/*INV_MSG(INV_MSG_LEVEL_INFO, "Load DMP3 image");
+	rc = inv_device_load(device, NULL, dmp3_image, sizeof(dmp3_image), true /* verify *///, //NULL);
+	//check_rc(rc);
 	
-#if !USE_IDDWRAPPER
+/*#if !USE_IDDWRAPPER
+	{
+		uint64_t available_sensor_mask; /* To keep track of available sensors*/
+		/*unsigned i;
+		/*
+		 * Check sensor availibitlity
+		 * if rc value is 0, it means sensor is available,
+		 * if rc value is INV_ERROR or INV_ERROR_BAD_ARG, sensor is NA
+		 */
+		/* available_sensor_mask = 0;
+		for(i = 0; i < sizeof(sensor_list)/sizeof(sensor_list[0]); ++i) {
+			const int rc = inv_device_ping_sensor(device, sensor_list[i].type);
+			INV_MSG(INV_MSG_LEVEL_INFO, "Ping %s %s", inv_sensor_2str(sensor_list[i].type), (rc == 0) ? "OK" : "KO");
+			if(rc == 0) {
+				available_sensor_mask |= (1ULL << sensor_list[i].type);
+			}
+		/*}
+
+		/*
+		 * Start all available sensors from the sensor list
+		 */
+		/*for(i = 0; i < sizeof(sensor_list)/sizeof(sensor_list[0]); ++i) {
+			if(available_sensor_mask & (1ULL << sensor_list[i].type)) {
+				INV_MSG(INV_MSG_LEVEL_INFO, "Starting %s @ %u us", inv_sensor_2str(sensor_list[i].type), sensor_list[i].period_us);
+				rc  = inv_device_set_sensor_period_us(device, sensor_list[i].type, sensor_list[i].period_us);
+				check_rc(rc);
+				rc += inv_device_start_sensor(device, sensor_list[i].type);
+				check_rc(rc);
+			}
+		}
+	}
+*///#endif
+		#if !USE_IDDWRAPPER
 	{
 		uint64_t available_sensor_mask; /* To keep track of available sensors*/
 		unsigned i;
@@ -421,7 +490,7 @@ int setup_and_run_icm20948(void)
 		}
 	}
 #endif
-
+	INV_MSG(INV_MSG_LEVEL_INFO, "Sensor inti has stopped");
 	do {
 		/*
 		 * Poll device for data
