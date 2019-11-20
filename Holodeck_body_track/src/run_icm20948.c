@@ -320,6 +320,7 @@ void sensorinit(void){
 			INV_MSG(INV_MSG_LEVEL_INFO, "Load DMP3 image");
 			rc = inv_device_load(device, NULL, dmp3_image, sizeof(dmp3_image), true /* verify */, NULL);
 			check_rc(rc);
+			break;
 			
 		}
 		INV_MSG(INV_MSG_LEVEL_INFO, "bypassed");
