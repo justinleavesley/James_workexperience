@@ -290,21 +290,28 @@ void discovery(){
 	
 }
 void sensorinit(void){
+	int rc = 0;
+	//rc += inv_host_serif_open(idd_io_hal_get_serif_instance_twi());
 	for(int i=0;i<15;i++){
 		INV_MSG(INV_MSG_LEVEL_INFO, "Sensor init working");
-		int rc = 0;
-		uint8_t whoami = 0xff;
 		if (sensors[i].present ==1){
+			uint8_t whoami = 0xff;
+			INV_MSG(INV_MSG_LEVEL_INFO, "if statement executed, for channel :%d",sensors[i].channel_numb);
+			//static inv_device_icm20948_t device_icm20948;
+			//static inv_device_t * device;
 			channel_set(0b00000001<<sensors[i].channel_numb);
-			rc += inv_host_serif_open(idd_io_hal_get_serif_instance_twi());
-			inv_device_icm20948_init(&device_icm20948, idd_io_hal_get_serif_instance_twi(),&sensor_listener, dmp3_image, sizeof(dmp3_image));
-			device = inv_device_icm20948_get_base(&device_icm20948);
-			sensors[i].Device_handle = device_icm20948;
+			uint8_t id = read_id(sensors[i].i2c_addr);
+			if (id !=234){
+				break;
+			}
+			inv_device_icm20948_init(&sensors[i].Device_handle, idd_io_hal_get_serif_instance_twi(),&sensor_listener, dmp3_image, sizeof(dmp3_image));
+			device = inv_device_icm20948_get_base(&sensors[i].Device_handle);
+			//sensors[i].Device_handle = device_icm20948;
 			rc = inv_device_whoami(device, &whoami);
 			INV_MSG(INV_MSG_LEVEL_INFO, "ICM WHOAMI=%02x", whoami);
 			INV_MSG(INV_MSG_LEVEL_INFO, "Sensor working on channel:%d", sensors[i].channel_numb);
 			check_rc(rc);
-			for(i = 0; i < sizeof(EXPECTED_WHOAMI)/sizeof(EXPECTED_WHOAMI[0]); ++i) {
+			for(int i = 0; i < sizeof(EXPECTED_WHOAMI)/sizeof(EXPECTED_WHOAMI[0]); ++i) {
 				if(whoami == EXPECTED_WHOAMI[i])
 				break;
 			}
@@ -320,8 +327,38 @@ void sensorinit(void){
 			INV_MSG(INV_MSG_LEVEL_INFO, "Load DMP3 image");
 			rc = inv_device_load(device, NULL, dmp3_image, sizeof(dmp3_image), true /* verify */, NULL);
 			check_rc(rc);
-			break;
-			
+				#if !USE_IDDWRAPPER
+	{
+		uint64_t available_sensor_mask; /* To keep track of available sensors*/
+		unsigned i;
+		/*
+		 * Check sensor availibitlity
+		 * if rc value is 0, it means sensor is available,
+		 * if rc value is INV_ERROR or INV_ERROR_BAD_ARG, sensor is NA
+		 */
+		available_sensor_mask = 0;
+		for(i = 0; i < sizeof(sensor_list)/sizeof(sensor_list[0]); ++i) {
+			const int rc = inv_device_ping_sensor(device, sensor_list[i].type);
+			INV_MSG(INV_MSG_LEVEL_INFO, "Ping %s %s", inv_sensor_2str(sensor_list[i].type), (rc == 0) ? "OK" : "KO");
+			if(rc == 0) {
+				available_sensor_mask |= (1ULL << sensor_list[i].type);
+			}
+		}
+
+		/*
+		 * Start all available sensors from the sensor list
+		 */
+		for(i = 0; i < sizeof(sensor_list)/sizeof(sensor_list[0]); ++i) {
+			if(available_sensor_mask & (1ULL << sensor_list[i].type)) {
+				INV_MSG(INV_MSG_LEVEL_INFO, "Starting %s @ %u us", inv_sensor_2str(sensor_list[i].type), sensor_list[i].period_us);
+				rc  = inv_device_set_sensor_period_us(device, sensor_list[i].type, sensor_list[i].period_us);
+				check_rc(rc);
+				rc += inv_device_start_sensor(device, sensor_list[i].type);
+				check_rc(rc);
+			}
+		}
+	}
+#endif
 		}
 		INV_MSG(INV_MSG_LEVEL_INFO, "bypassed");
 	}
@@ -459,38 +496,7 @@ int setup_and_run_icm20948(void)
 		}
 	}
 *///#endif
-		#if !USE_IDDWRAPPER
-	{
-		uint64_t available_sensor_mask; /* To keep track of available sensors*/
-		unsigned i;
-		/*
-		 * Check sensor availibitlity
-		 * if rc value is 0, it means sensor is available,
-		 * if rc value is INV_ERROR or INV_ERROR_BAD_ARG, sensor is NA
-		 */
-		available_sensor_mask = 0;
-		for(i = 0; i < sizeof(sensor_list)/sizeof(sensor_list[0]); ++i) {
-			const int rc = inv_device_ping_sensor(device, sensor_list[i].type);
-			INV_MSG(INV_MSG_LEVEL_INFO, "Ping %s %s", inv_sensor_2str(sensor_list[i].type), (rc == 0) ? "OK" : "KO");
-			if(rc == 0) {
-				available_sensor_mask |= (1ULL << sensor_list[i].type);
-			}
-		}
-
-		/*
-		 * Start all available sensors from the sensor list
-		 */
-		for(i = 0; i < sizeof(sensor_list)/sizeof(sensor_list[0]); ++i) {
-			if(available_sensor_mask & (1ULL << sensor_list[i].type)) {
-				INV_MSG(INV_MSG_LEVEL_INFO, "Starting %s @ %u us", inv_sensor_2str(sensor_list[i].type), sensor_list[i].period_us);
-				rc  = inv_device_set_sensor_period_us(device, sensor_list[i].type, sensor_list[i].period_us);
-				check_rc(rc);
-				rc += inv_device_start_sensor(device, sensor_list[i].type);
-				check_rc(rc);
-			}
-		}
-	}
-#endif
+	
 	INV_MSG(INV_MSG_LEVEL_INFO, "Sensor inti has stopped");
 	do {
 		/*
