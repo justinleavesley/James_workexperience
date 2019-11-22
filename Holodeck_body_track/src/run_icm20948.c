@@ -234,6 +234,7 @@ static volatile uint32_t last_irq_time = 0;
 	int present;
 	int ready;
 	inv_device_icm20948_t Device_handle;
+	inv_device_t * device;
 	} ;
 struct sensor sensors[15];
 void channel_set(uint8_t channel){
@@ -293,7 +294,7 @@ void sensorinit(void){
 	int rc = 0;
 	//rc += inv_host_serif_open(idd_io_hal_get_serif_instance_twi());
 	for(int i=0;i<15;i++){
-		INV_MSG(INV_MSG_LEVEL_INFO, "Sensor init working");
+		INV_MSG(INV_MSG_LEVEL_INFO, "Sensor init");
 		if (sensors[i].present ==1){
 			uint8_t whoami = 0xff;
 			INV_MSG(INV_MSG_LEVEL_INFO, "if statement executed, for channel :%d",sensors[i].channel_numb);
@@ -301,66 +302,59 @@ void sensorinit(void){
 			//static inv_device_t * device;
 			channel_set(0b00000001<<sensors[i].channel_numb);
 			uint8_t id = read_id(sensors[i].i2c_addr);
+			INV_MSG(INV_MSG_LEVEL_INFO, "read_id:%d",id);
+			
 			if (id !=234){
 				break;
 			}
 			inv_device_icm20948_init(&sensors[i].Device_handle, idd_io_hal_get_serif_instance_twi(),&sensor_listener, dmp3_image, sizeof(dmp3_image));
-			device = inv_device_icm20948_get_base(&sensors[i].Device_handle);
+			sensors[i].device = inv_device_icm20948_get_base(&sensors[i].Device_handle);
 			//sensors[i].Device_handle = device_icm20948;
-			rc = inv_device_whoami(device, &whoami);
+			rc = inv_device_whoami(sensors[i].device, &whoami);
 			INV_MSG(INV_MSG_LEVEL_INFO, "ICM WHOAMI=%02x", whoami);
 			INV_MSG(INV_MSG_LEVEL_INFO, "Sensor working on channel:%d", sensors[i].channel_numb);
 			check_rc(rc);
-			for(int i = 0; i < sizeof(EXPECTED_WHOAMI)/sizeof(EXPECTED_WHOAMI[0]); ++i) {
-				if(whoami == EXPECTED_WHOAMI[i])
-				break;
-			}
-
-			if(i == sizeof(EXPECTED_WHOAMI)/sizeof(EXPECTED_WHOAMI[0])) {
-				INV_MSG(INV_MSG_LEVEL_ERROR, "Bad WHOAMI value. Got 0x%02x. Expected @EXPECTED_WHOAMI@.", whoami);
-				check_rc(-1);
-			
-			}
 			INV_MSG(INV_MSG_LEVEL_INFO, "Setting-up ICM device");
-			rc = inv_device_setup(device);
+			rc = inv_device_setup(sensors[i].device);
 			check_rc(rc);
 			INV_MSG(INV_MSG_LEVEL_INFO, "Load DMP3 image");
-			rc = inv_device_load(device, NULL, dmp3_image, sizeof(dmp3_image), true /* verify */, NULL);
+			rc = inv_device_load(sensors[i].device, NULL, dmp3_image, sizeof(dmp3_image), true /* verify */, NULL);
 			check_rc(rc);
-				#if !USE_IDDWRAPPER
 	{
-		uint64_t available_sensor_mask; /* To keep track of available sensors*/
-		unsigned i;
-		/*
-		 * Check sensor availibitlity
-		 * if rc value is 0, it means sensor is available,
-		 * if rc value is INV_ERROR or INV_ERROR_BAD_ARG, sensor is NA
-		 */
-		available_sensor_mask = 0;
-		for(i = 0; i < sizeof(sensor_list)/sizeof(sensor_list[0]); ++i) {
-			const int rc = inv_device_ping_sensor(device, sensor_list[i].type);
-			INV_MSG(INV_MSG_LEVEL_INFO, "Ping %s %s", inv_sensor_2str(sensor_list[i].type), (rc == 0) ? "OK" : "KO");
-			if(rc == 0) {
-				available_sensor_mask |= (1ULL << sensor_list[i].type);
+			uint64_t available_sensor_mask; /* To keep track of available sensors*/
+			unsigned i;
+		    inv_device_t * device_temp = sensors[i].device;
+			/*
+			 * Check sensor availibitlity
+			 * if rc value is 0, it means sensor is available,
+			 * if rc value is INV_ERROR or INV_ERROR_BAD_ARG, sensor is NA
+			 */
+			available_sensor_mask = 0;
+			for(i = 0; i < sizeof(sensor_list)/sizeof(sensor_list[0]); ++i) {
+				const int rc = inv_device_ping_sensor(device_temp, sensor_list[i].type);
+				INV_MSG(INV_MSG_LEVEL_INFO, "Ping %s %s", inv_sensor_2str(sensor_list[i].type), (rc == 0) ? "OK" : "KO");
+				if(rc == 0) {
+					available_sensor_mask |= (1ULL << sensor_list[i].type);
+				}
 			}
-		}
 
-		/*
-		 * Start all available sensors from the sensor list
-		 */
-		for(i = 0; i < sizeof(sensor_list)/sizeof(sensor_list[0]); ++i) {
-			if(available_sensor_mask & (1ULL << sensor_list[i].type)) {
-				INV_MSG(INV_MSG_LEVEL_INFO, "Starting %s @ %u us", inv_sensor_2str(sensor_list[i].type), sensor_list[i].period_us);
-				rc  = inv_device_set_sensor_period_us(device, sensor_list[i].type, sensor_list[i].period_us);
-				check_rc(rc);
-				rc += inv_device_start_sensor(device, sensor_list[i].type);
-				check_rc(rc);
+			/*
+			 * Start all available sensors from the sensor list
+			 */
+			for(i = 0; i < sizeof(sensor_list)/sizeof(sensor_list[0]); ++i) {
+				if(available_sensor_mask & (1ULL << sensor_list[i].type)) {
+					INV_MSG(INV_MSG_LEVEL_INFO, "Starting %s @ %u us", inv_sensor_2str(sensor_list[i].type), sensor_list[i].period_us);
+					rc  = inv_device_set_sensor_period_us(device_temp, sensor_list[i].type, sensor_list[i].period_us);
+					check_rc(rc);
+					rc += inv_device_start_sensor(device_temp, sensor_list[i].type);
+					check_rc(rc);
+				}
 			}
-		}
 	}
-#endif
-		}
+
+		}else{
 		INV_MSG(INV_MSG_LEVEL_INFO, "bypassed");
+		}
 	}
 }
 
@@ -503,8 +497,13 @@ int setup_and_run_icm20948(void)
 		 * Poll device for data
 		 */
 		//if (irq_from_device & TO_MASK(GPIO_SENSOR_IRQ_D6)) {
-			rc = inv_device_poll(device);
-			check_rc(rc);
+			//for (int i =0;i<15;i++){
+				//if (sensors[i].present ==1){
+				//channel_set(0b00000001<<sensors[i].channel_numb);
+				//rc = inv_device_poll(sensors[i].device);
+				//check_rc(rc);
+				//}
+			//}
             //sched_yield();  //trying not to block the OS
 
 		//	if(rc >= 0) {
