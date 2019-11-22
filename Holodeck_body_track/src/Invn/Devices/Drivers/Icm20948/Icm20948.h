@@ -213,7 +213,7 @@ extern uint64_t inv_icm20948_get_time_us(void);
 static inline void inv_icm20948_reset_states(struct inv_icm20948 * s,
 		const struct inv_icm20948_serif * serif)
 {
-	assert(icm20948_instance == 0);
+	//assert(icm20948_instance == 0);
 
 	memset(s, 0, sizeof(*s));
 	s->serif = *serif;

@@ -176,6 +176,7 @@ static void msg_printer(int level, const char * str, va_list ap);
 void channel_set(uint8_t channel);
 uint8_t read_id(uint8_t i2c_address);
 void sensorinit(void);
+int sensor_id;
 /*
  * Flag set from device irq handler 
  */
@@ -309,7 +310,7 @@ void sensorinit(void){
 			}
 			inv_device_icm20948_init(&sensors[i].Device_handle, idd_io_hal_get_serif_instance_twi(),&sensor_listener, dmp3_image, sizeof(dmp3_image));
 			sensors[i].device = inv_device_icm20948_get_base(&sensors[i].Device_handle);
-			//sensors[i].Device_handle = device_icm20948;
+			device = inv_device_icm20948_get_base(&sensors[i].Device_handle);
 			rc = inv_device_whoami(sensors[i].device, &whoami);
 			INV_MSG(INV_MSG_LEVEL_INFO, "ICM WHOAMI=%02x", whoami);
 			INV_MSG(INV_MSG_LEVEL_INFO, "Sensor working on channel:%d", sensors[i].channel_numb);
@@ -323,7 +324,7 @@ void sensorinit(void){
 	{
 			uint64_t available_sensor_mask; /* To keep track of available sensors*/
 			unsigned i;
-		    inv_device_t * device_temp = sensors[i].device;
+		    //inv_device_t * device_temp = sensors[i].device;
 			/*
 			 * Check sensor availibitlity
 			 * if rc value is 0, it means sensor is available,
@@ -331,7 +332,7 @@ void sensorinit(void){
 			 */
 			available_sensor_mask = 0;
 			for(i = 0; i < sizeof(sensor_list)/sizeof(sensor_list[0]); ++i) {
-				const int rc = inv_device_ping_sensor(device_temp, sensor_list[i].type);
+				const int rc = inv_device_ping_sensor(device, sensor_list[i].type);
 				INV_MSG(INV_MSG_LEVEL_INFO, "Ping %s %s", inv_sensor_2str(sensor_list[i].type), (rc == 0) ? "OK" : "KO");
 				if(rc == 0) {
 					available_sensor_mask |= (1ULL << sensor_list[i].type);
@@ -344,9 +345,9 @@ void sensorinit(void){
 			for(i = 0; i < sizeof(sensor_list)/sizeof(sensor_list[0]); ++i) {
 				if(available_sensor_mask & (1ULL << sensor_list[i].type)) {
 					INV_MSG(INV_MSG_LEVEL_INFO, "Starting %s @ %u us", inv_sensor_2str(sensor_list[i].type), sensor_list[i].period_us);
-					rc  = inv_device_set_sensor_period_us(device_temp, sensor_list[i].type, sensor_list[i].period_us);
+					rc  = inv_device_set_sensor_period_us(device, sensor_list[i].type, sensor_list[i].period_us);
 					check_rc(rc);
-					rc += inv_device_start_sensor(device_temp, sensor_list[i].type);
+					rc += inv_device_start_sensor(device, sensor_list[i].type);
 					check_rc(rc);
 				}
 			}
@@ -497,13 +498,14 @@ int setup_and_run_icm20948(void)
 		 * Poll device for data
 		 */
 		//if (irq_from_device & TO_MASK(GPIO_SENSOR_IRQ_D6)) {
-			//for (int i =0;i<15;i++){
-				//if (sensors[i].present ==1){
-				//channel_set(0b00000001<<sensors[i].channel_numb);
-				//rc = inv_device_poll(sensors[i].device);
-				//check_rc(rc);
-				//}
-			//}
+			for (int i =0;i<15;i++){
+				if (sensors[i].present ==1){
+				channel_set(0b00000001<<sensors[i].channel_numb);
+				rc = inv_device_poll(sensors[i].device);
+				sensor_id = i;
+				check_rc(rc);
+				}
+			}
             //sched_yield();  //trying not to block the OS
 
 		//	if(rc >= 0) {
@@ -589,7 +591,7 @@ static void sensor_event_cb(const inv_sensor_event_t * event, void * arg)
 			break;
 		case INV_SENSOR_TYPE_GAME_ROTATION_VECTOR:
 		case INV_SENSOR_TYPE_ROTATION_VECTOR:
-					sprintf(out_str,"1:0:quat:%f,%f,%f,%f\n",(event->data.quaternion.quat[0]),
+					sprintf(out_str,"%d:0:quat:%f,%f,%f,%f\n",sensor_id,(event->data.quaternion.quat[0]),
 					(event->data.quaternion.quat[1]),
 					(event->data.quaternion.quat[2]),
 					(event->data.quaternion.quat[3]));
@@ -735,4 +737,3 @@ static void msg_printer(int level, const char * str, va_list ap)
 	    } 
 	    return len;
 	}
-
